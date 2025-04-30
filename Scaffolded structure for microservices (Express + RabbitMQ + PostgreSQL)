@@ -1,0 +1,204 @@
+// Scaffolded structure for microservices (Express + RabbitMQ + PostgreSQL)
+
+// user-service/index.js
+const express = require('express');
+const bodyParser = require('body-parser');
+const jwt = require('jsonwebtoken');
+const amqp = require('amqplib');
+const { Pool } = require('pg');
+const app = express();
+
+app.use(bodyParser.json());
+
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME,
+});
+
+let channel;
+(async () => {
+  const conn = await amqp.connect(process.env.RABBITMQ_URL);
+  channel = await conn.createChannel();
+  await channel.assertQueue('user.events');
+})();
+
+app.post('/register', async (req, res) => {
+  const { name, email, preferences } = req.body;
+  const { rows } = await pool.query('INSERT INTO users(name, email, preferences) VALUES ($1, $2, $3) RETURNING *', [name, email, preferences]);
+  const user = rows[0];
+  channel.sendToQueue('user.events', Buffer.from(JSON.stringify({ type: 'USER_REGISTERED', payload: user })));
+  res.json(user);
+});
+
+app.use((req, res, next) => {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(401).send('Missing token');
+  try {
+    req.user = jwt.verify(token, process.env.JWT_SECRET);
+    next();
+  } catch (err) {
+    res.status(403).send('Invalid token');
+  }
+});
+
+app.get('/me', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+  res.json(rows[0]);
+});
+
+app.listen(process.env.PORT, () => console.log(`User Service running on ${process.env.PORT}`));
+
+
+// notification-service/index.js
+const express = require('express');
+const bodyParser = require('body-parser');
+const { Pool } = require('pg');
+const amqp = require('amqplib');
+const app = express();
+
+app.use(bodyParser.json());
+
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME,
+});
+
+let channel;
+(async () => {
+  const conn = await amqp.connect(process.env.RABBITMQ_URL);
+  channel = await conn.createChannel();
+  await channel.assertQueue('notification.events');
+})();
+
+app.post('/mark-read', async (req, res) => {
+  const { notificationId } = req.body;
+  await pool.query('UPDATE notifications SET read = true WHERE id = $1', [notificationId]);
+  res.send('Marked as read');
+});
+
+app.get('/unread/:userId', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM notifications WHERE userId = $1 AND read = false', [req.params.userId]);
+  res.json(rows);
+});
+
+app.listen(process.env.PORT, () => console.log(`Notification Service running on ${process.env.PORT}`));
+
+
+// recommendation-service/index.js
+const express = require('express');
+const bodyParser = require('body-parser');
+const { Pool } = require('pg');
+const amqp = require('amqplib');
+const app = express();
+
+app.use(bodyParser.json());
+
+const pool = new Pool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME,
+});
+
+let channel;
+(async () => {
+  const conn = await amqp.connect(process.env.RABBITMQ_URL);
+  channel = await conn.createChannel();
+  await channel.assertQueue('recommendation.events');
+})();
+
+// Mock recommendation based on purchase activity
+app.post('/generate/:userId', async (req, res) => {
+  const userId = req.params.userId;
+  const mockRecommendations = [
+    { title: 'Wireless Earbuds', productId: 'abc123' },
+    { title: 'Smartwatch', productId: 'xyz789' },
+  ];
+  await pool.query('INSERT INTO recommendations(userId, content) VALUES ($1, $2)', [userId, JSON.stringify(mockRecommendations)]);
+  channel.sendToQueue('recommendation.events', Buffer.from(JSON.stringify({ type: 'RECOMMENDATION_CREATED', userId, recommendations: mockRecommendations })));
+  res.json({ status: 'Recommendations sent', data: mockRecommendations });
+});
+
+app.listen(process.env.PORT, () => console.log(`Recommendation Service running on ${process.env.PORT}`));
+
+
+// graphql-gateway/index.js
+const { ApolloServer, gql } = require('apollo-server');
+const fetch = require('node-fetch');
+const jwt = require('jsonwebtoken');
+
+const typeDefs = gql`
+  type User {
+    id: ID
+    name: String
+    email: String
+    preferences: String
+  }
+
+  type Notification {
+    id: ID
+    userId: ID
+    type: String
+    content: String
+    sentAt: String
+    read: Boolean
+  }
+
+  type Recommendation {
+    userId: ID
+    content: String
+  }
+
+  type Query {
+    me(token: String!): User
+    unreadNotifications(userId: ID!): [Notification]
+  }
+
+  type Mutation {
+    markNotificationRead(notificationId: ID!): String
+    generateRecommendations(userId: ID!): Recommendation
+  }
+`;
+
+const resolvers = {
+  Query: {
+    me: async (_, { token }) => {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const res = await fetch(`http://user-service:${process.env.USER_PORT}/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return res.json();
+    },
+    unreadNotifications: async (_, { userId }) => {
+      const res = await fetch(`http://notification-service:${process.env.NOTIF_PORT}/unread/${userId}`);
+      return res.json();
+    },
+  },
+  Mutation: {
+    markNotificationRead: async (_, { notificationId }) => {
+      await fetch(`http://notification-service:${process.env.NOTIF_PORT}/mark-read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationId }),
+      });
+      return 'Marked as read';
+    },
+    generateRecommendations: async (_, { userId }) => {
+      const res = await fetch(`http://recommendation-service:${process.env.REC_PORT}/generate/${userId}`, {
+        method: 'POST',
+      });
+      return res.json();
+    },
+  },
+};
+
+const server = new ApolloServer({ typeDefs, resolvers });
+
+server.listen().then(({ url }) => {
+  console.log(`GraphQL Gateway ready at ${url}`);
+});
+⬇
