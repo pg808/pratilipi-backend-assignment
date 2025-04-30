@@ -1,0 +1,122 @@
+{
+  "info": {
+    "_postman_id": "12345-abcd-67890-efgh-23456",
+    "name": "User & Notification Services",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "User Service",
+      "item": [
+        {
+          "name": "Register a New User",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"John Doe\", \"email\": \"johndoe@example.com\", \"preferences\": [\"promotions\", \"order_updates\"]}"
+            },
+            "url": {
+              "raw": "http://localhost:4001/users",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "4001",
+              "path": ["users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Preferences",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"preferences\": [\"order_updates\", \"recommendations\"]}"
+            },
+            "url": {
+              "raw": "http://localhost:4001/users/123/preferences",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "4001",
+              "path": ["users", "123", "preferences"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:4001/users/123",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "4001",
+              "path": ["users", "123"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notification Service",
+      "item": [
+        {
+          "name": "Create Notification",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"userId\": \"123\", \"type\": \"promotion\", \"content\": {\"message\": \"50% off on your next purchase!\", \"offer_code\": \"PROMO50\"}}"
+            },
+            "url": {
+              "raw": "http://localhost:4002/notifications",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "4002",
+              "path": ["notifications"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Notifications for a User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:4002/notifications/123",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "4002",
+              "path": ["notifications", "123"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark Notification as Read",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:4002/notifications/1/read",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "4002",
+              "path": ["notifications", "1", "read"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
+⬇
