@@ -1,0 +1,17 @@
+query GetUserWithNotifications($userId: ID!) {
+  getUser(id: $userId) {
+    id
+    name
+    email
+    preferences
+  }
+  getNotifications(userId: $userId) {
+    id
+    type
+    content
+    sentAt
+    read
+  }
+}
+⬇
+⬇
