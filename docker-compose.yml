@@ -1,0 +1,91 @@
+version: '3.9'
+
+services:
+  user-service:
+    build: ./user-service
+    container_name: user-service
+    environment:
+      - PORT=4001
+      - DB_URL=postgres://user:password@user-db:5432/userdb
+      - RABBITMQ_URL=amqp://rabbitmq
+    depends_on:
+      - user-db
+      - rabbitmq
+    ports:
+      - "4001:4001"
+
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    environment:
+      - PORT=4002
+      - DB_URL=postgres://user:password@notif-db:5432/notifdb
+      - RABBITMQ_URL=amqp://rabbitmq
+    depends_on:
+      - notif-db
+      - rabbitmq
+    ports:
+      - "4002:4002"
+
+  recommender-service:
+    build: ./recommender-service
+    container_name: recommender-service
+    environment:
+      - PORT=4003
+      - DB_URL=postgres://user:password@reco-db:5432/recodb
+      - RABBITMQ_URL=amqp://rabbitmq
+    depends_on:
+      - reco-db
+      - rabbitmq
+    ports:
+      - "4003:4003"
+
+  graphql-gateway:
+    build: ./graphql-gateway
+    container_name: graphql-gateway
+    environment:
+      - PORT=4000
+      - USER_SERVICE_URL=http://user-service:4001
+      - NOTIF_SERVICE_URL=http://notification-service:4002
+      - RECO_SERVICE_URL=http://recommender-service:4003
+    depends_on:
+      - user-service
+      - notification-service
+      - recommender-service
+    ports:
+      - "4000:4000"
+
+  user-db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: userdb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5433:5432"
+
+  notif-db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: notifdb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5434:5432"
+
+  reco-db:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: recodb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5435:5432"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Web UI
+⬇
